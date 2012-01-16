@@ -1,6 +1,7 @@
 require 'yaml'
 require 'oauth'
 require 'twitter'
+require 'twitter-text'
 require 'highline/import'
 
 TWITTER_CONFIG = YAML.load_file('config/api.yml')
@@ -44,8 +45,7 @@ file LIST_MEMBERS_FILE do
   next_cursor = -1
   begin
     member_page = Twitter.list_members(list_user, list_name, :cursor => next_cursor)
-    all_members += member_page.collection
-    puts "Fetched page #{next_cursor}"
+    all_members += member_page.collection.map {|u| u.id }
     next_cursor = member_page.next_cursor
   end while !member_page.last?
   open(LIST_MEMBERS_FILE, 'w') {|fh| YAML.dump(all_members, fh) }
@@ -53,7 +53,16 @@ end
 
 namespace :dm do
   task :fetch do
-    puts YAML.dump(Twitter.direct_messages)
+    authorized_users = Set[*YAML.load_file(LIST_MEMBERS_FILE)]
+    messages = Twitter.direct_messages.select {|msg| authorized_users.member?(msg.sender.id) }
+    votes = {}
+    messages.each do |msg|
+      features = []
+      Twitter::Extractor.extract_mentioned_screen_names(msg.text).each {|str| features << "@#{str}" }
+      Twitter::Extractor.extract_hashtags(msg.text).each {|str| features << "##{str}" }
+      features.each {|f| votes[f] = (votes[f] || 0) + 1 }
+    end
+    puts YAML.dump(votes)
   end
 end
 
