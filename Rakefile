@@ -5,12 +5,13 @@ require 'highline/import'
 
 TWITTER_CONFIG = YAML.load_file('config/api.yml')
 CREDENTIAL_FILE = 'config/credentials.yml'
+LIST_MEMBERS_FILE = 'config/members.yml'
 
 $LOAD_PATH << Dir.pwd
 
 task :default => :'dm:fetch'
 
-  file CREDENTIAL_FILE do
+file CREDENTIAL_FILE do
   key = ask('OAuth key: ') {|q| q.echo = '*' }
   secret = ask('OAuth secret: ') {|q| q.echo = '*' }
   consumer = OAuth::Consumer.new(key, secret, TWITTER_CONFIG)
@@ -32,12 +33,30 @@ task :default => :'dm:fetch'
   puts "Saved OAuth credentials to #{CREDENTIAL_FILE}."
 end
 
+task :configure do
+  require 'config/twitter'
+end
+
+file LIST_MEMBERS_FILE do
+  list_user = ask('List owner: ')
+  list_name = ask('List name: ')
+  all_members = []
+  next_cursor = -1
+  begin
+    member_page = Twitter.list_members(list_user, list_name, :cursor => next_cursor)
+    all_members += member_page.collection
+    puts "Fetched page #{next_cursor}"
+    next_cursor = member_page.next_cursor
+  end while !member_page.last?
+  open(LIST_MEMBERS_FILE, 'w') {|fh| YAML.dump(all_members, fh) }
+end
+
 namespace :dm do
   task :fetch do
-    require 'config/twitter'
-
     puts YAML.dump(Twitter.direct_messages)
   end
 end
 
-task :'dm:fetch' => CREDENTIAL_FILE
+task :configure => CREDENTIAL_FILE
+file LIST_MEMBERS_FILE => :configure
+task :'dm:fetch' => LIST_MEMBERS_FILE
