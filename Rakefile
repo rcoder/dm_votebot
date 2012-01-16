@@ -1,4 +1,7 @@
 require 'yaml'
+require 'time'
+require 'set'
+
 require 'oauth'
 require 'twitter'
 require 'twitter-text'
@@ -54,14 +57,43 @@ end
 namespace :dm do
   task :fetch do
     authorized_users = Set[*YAML.load_file(LIST_MEMBERS_FILE)]
-    messages = Twitter.direct_messages.select {|msg| authorized_users.member?(msg.sender.id) }
+
+    messages = []
+    seen_messages = Set.new
+    message_page = Twitter.direct_messages
+
+    while true
+      message_page.select! do |msg|
+        authorized_users.member?(msg.sender.id) && !seen_messages.member?(msg.id)
+      end
+
+      message_page.each do |msg|
+        seen_messages << msg.id
+        messages << msg
+      end
+
+      break if message_page.empty?
+
+      max_id = message_page.collect {|msg| msg.id }.last
+      message_page = Twitter.direct_messages(:max_id => max_id, :count => 200)
+    end
+
     votes = {}
+    votes_by_user = Set.new
+
     messages.each do |msg|
       features = []
       Twitter::Extractor.extract_mentioned_screen_names(msg.text).each {|str| features << "@#{str}" }
       Twitter::Extractor.extract_hashtags(msg.text).each {|str| features << "##{str}" }
-      features.each {|f| votes[f] = (votes[f] || 0) + 1 }
+      features.each do |f|
+        full_key = "#{msg.sender.id}:#{f}"
+        unless votes_by_user.member?(full_key)
+          votes[f] = (votes[f] || 0) + 1
+          votes_by_user << full_key
+        end
+      end
     end
+
     puts YAML.dump(votes)
   end
 end
