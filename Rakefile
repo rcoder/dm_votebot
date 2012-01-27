@@ -86,8 +86,8 @@ namespace :dm do
 
     messages.each do |msg|
       features = []
-      Twitter::Extractor.extract_mentioned_screen_names(msg.text).each {|str| features << "@#{str}" }
-      Twitter::Extractor.extract_hashtags(msg.text).each {|str| features << "##{str}" }
+      #Twitter::Extractor.extract_mentioned_screen_names(msg.text).each {|str| features << "@#{str}" }
+      Twitter::Extractor.extract_hashtags(msg.text).each {|str| features << "##{str.downcase}" }
       features.each do |f|
         full_key = "#{msg.sender.id}:#{f}"
         unless votes_by_user.member?(full_key)
@@ -98,7 +98,7 @@ namespace :dm do
     end
 
     votes.keys.each do |k|
-      puts "k,#{votes[k]}"
+      puts "#{k},#{votes[k]}"
     end
   end
 end
