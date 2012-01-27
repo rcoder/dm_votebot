@@ -2,6 +2,8 @@ require 'yaml'
 require 'time'
 require 'set'
 
+$KCODE = 'UTF8'
+
 require 'oauth'
 require 'twitter'
 require 'twitter-text'
@@ -45,12 +47,13 @@ file LIST_MEMBERS_FILE do
   list_user = ask('List owner: ')
   list_name = ask('List name: ')
   all_members = []
-  next_cursor = -1
+  member_page = Twitter.list_members(list_user, list_name)
+  all_members = [member_page.users.map {|u| u.id }]
   begin
-    member_page = Twitter.list_members(list_user, list_name, :cursor => next_cursor)
-    all_members += member_page.collection.map {|u| u.id }
     next_cursor = member_page.next_cursor
-  end while !member_page.last?
+    member_page = Twitter.list_members(list_user, list_name, :cursor => next_cursor)
+    all_members += member_page.users.map {|u| u.id }
+  end while !(member_page.last? || next_cursor == 0)
   open(LIST_MEMBERS_FILE, 'w') {|fh| YAML.dump(all_members, fh) }
 end
 
@@ -63,7 +66,7 @@ namespace :dm do
     message_page = Twitter.direct_messages
 
     while true
-      message_page.select! do |msg|
+      message_page = message_page.select do |msg|
         authorized_users.member?(msg.sender.id) && !seen_messages.member?(msg.id)
       end
 
@@ -94,7 +97,9 @@ namespace :dm do
       end
     end
 
-    puts YAML.dump(votes)
+    votes.keys.each do |k|
+      puts "k,#{votes[k]}"
+    end
   end
 end
 
